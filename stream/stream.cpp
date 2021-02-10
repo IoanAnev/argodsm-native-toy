@@ -44,7 +44,6 @@
 /*-----------------------------------------------------------------------*/
 
 #include "argo.hpp"
-#include "../common/wtime.hpp"
 
 #include <cmath>
 #include <cfloat>
@@ -354,7 +353,7 @@ main()
 		}
 #endif
 
-		argo_barrier(nthreads);
+		argo::barrier(nthreads);
 
 		#pragma omp single
 		if (workrank == 0) {
@@ -380,7 +379,7 @@ main()
 			a[rand_index[j]] = 2.0E0 * a[rand_index[j]];
 #endif
 
-		argo_barrier(nthreads);
+		argo::barrier(nthreads);
 
 		#pragma omp single
 		if (workrank == 0) {
@@ -408,7 +407,7 @@ main()
 
 			/* --- COPY --- */
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -426,7 +425,7 @@ main()
 #endif
 #endif
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -434,7 +433,7 @@ main()
 
 			/* --- SCALE --- */
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -452,7 +451,7 @@ main()
 #endif
 #endif
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -460,7 +459,7 @@ main()
 
 			/* --- ADD --- */
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -478,7 +477,7 @@ main()
 #endif
 #endif
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -486,7 +485,7 @@ main()
 
 			/* --- TRIAD --- */
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -504,7 +503,7 @@ main()
 #endif
 #endif
 
-			argo_barrier(nthreads);
+			argo::barrier(nthreads);
 
 			#pragma omp master
 			if (workrank == 0)
@@ -540,8 +539,6 @@ main()
 		/* --- Check Results --- */
 		// checkSTREAMresults();
 		// printf(HLINE);
-
-		print_argo_stats();
 	}
 
 #if   RANDACC == 1
