@@ -12,6 +12,7 @@
  */
 
 #include "argo.hpp"
+#include "../common/wtime.hpp"
 
 #include <omp.h>
 #include <iostream>
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
 	{
 		init(begM, endM, y, 0);
 		init(begN, endN, x, 1);
-		argo::barrier(nthreads);
+		argo_barrier(nthreads);
 		
 		#pragma omp for schedule(static)
 		for (size_t i = begM; i < endM; ++i) {
@@ -136,7 +137,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	argo::barrier();
+	argo_barrier();
 
 	clock_gettime(CLOCK_MONOTONIC, &tp_end);
 	
@@ -157,6 +158,8 @@ int main(int argc, char *argv[])
 		printf("M:%zu N:%zu ITER:%zu NR_PROCS:%d CPUS:%d TIME_MSEC:%.2lf MFLOPS:%.2lf\n",
 			M, N, ITER, numtasks, nthreads,
 			time_msec, mflops);
+
+		print_argo_stats();
 	}
 	
 	argo::codelete_array(A);

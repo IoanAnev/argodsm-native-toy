@@ -11,6 +11,7 @@
  */
 
 #include "argo.hpp"
+#include "../common/wtime.hpp"
 
 #include <omp.h>
 #include <iostream>
@@ -120,7 +121,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	
-	argo::barrier();
+	argo_barrier();
 	
 	clock_gettime(CLOCK_MONOTONIC, &tp_end);
 	
@@ -141,6 +142,8 @@ int main(int argc, char *argv[])
 		printf("N:%zu ITER:%zu NR_PROCS:%d CPUS:%d TIME_MSEC:%.2lf MFLOPS:%.2lf\n",
 			N, ITER, numtasks, nthreads,
 			time_msec, mflops);
+		
+		print_argo_stats();
 	}
 
 	argo::codelete_array(x);

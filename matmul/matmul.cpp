@@ -10,6 +10,7 @@
  */
 
 #include "argo.hpp"
+#include "../common/wtime.hpp"
 
 #include <omp.h>
 #include <string>
@@ -137,7 +138,7 @@ void init_matrices()
                 }
         }
 
-        argo::barrier(nthreads);
+        argo_barrier(nthreads);
 }
 
 void matmul_ref()
@@ -193,7 +194,7 @@ void matmul_opt()
                 }
         }
 
-        argo::barrier(nthreads);
+        argo_barrier(nthreads);
 }
 
 int verify_result()
@@ -248,6 +249,7 @@ static void run_multiply(const int &verify)
                         std::cout << "Reference runtime: " << time_stop - time_start
                                   << std::endl;
                 }
+		print_argo_stats();
         }
 }
 

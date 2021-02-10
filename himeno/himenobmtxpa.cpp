@@ -40,6 +40,7 @@
 ********************************************************************/
 
 #include "argo.hpp"
+#include "../common/wtime.hpp"
 
 #include <omp.h>
 #include <iostream>
@@ -178,7 +179,7 @@ main(int argc, char *argv[])
 			printf(" Measure the performance in %d times.\n\n",*nn);
 		}
 
-		argo::barrier(nthreads);
+		argo_barrier(nthreads);
 
 		#pragma omp master
 		if (workrank == 0)
@@ -205,7 +206,7 @@ main(int argc, char *argv[])
 			printf(" Wait for a while\n\n");
 		}
 
-		argo::barrier(nthreads);
+		argo_barrier(nthreads);
 
 		#pragma omp master
 		if (workrank == 0)
@@ -227,6 +228,8 @@ main(int argc, char *argv[])
 			printf("MFLOPS measured : %f\n",xmflops2);
 			score = xmflops2/82.84;
 			printf("Score based on Pentium III 600MHz using Fortran 77: %f\n",score);
+			
+			print_argo_stats();
 		}
 	}
 
@@ -380,7 +383,7 @@ jacobi(int nn, Matrix* a,Matrix* b,Matrix* c,
 	for(n=0 ; n<nn ; n++){
 		#pragma omp master
 		gosa1 = 0.0;
-		argo::barrier(nthreads);
+		argo_barrier(nthreads);
 		
 		#pragma omp for schedule(static)
 		for(i=beg; i<end; i++)
@@ -410,7 +413,7 @@ jacobi(int nn, Matrix* a,Matrix* b,Matrix* c,
 
 					MR(wrk2,0,i,j,k)= MR(p,0,i,j,k) + omega*ss;
 				}
-		argo::barrier(nthreads);
+		argo_barrier(nthreads);
 		
 		#pragma omp for schedule(static)
 		for(i=beg; i<end; i++)
@@ -421,12 +424,12 @@ jacobi(int nn, Matrix* a,Matrix* b,Matrix* c,
 
 	#pragma omp master
 	{
-		lock->lock();
+		argo_lock(lock);
 		*ggosa += gosa1;
-		lock->unlock();
+		argo_unlock(lock);
 	}
 
-	argo::barrier(nthreads);
+	argo_barrier(nthreads);
 
 	return(*ggosa);
 }
