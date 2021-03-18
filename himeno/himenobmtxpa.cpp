@@ -40,6 +40,7 @@
 ********************************************************************/
 
 #include "argo.hpp"
+#include "cohort_lock.hpp"
 
 #include <omp.h>
 #include <iostream>
@@ -81,8 +82,7 @@ int nthreads;
 int   *nn;
 float *ggosa;
 
-bool *lock_flag;
-argo::globallock::global_tas_lock *lock;
+argo::globallock::cohort_lock *lock;
 
 int
 main(int argc, char *argv[])
@@ -133,8 +133,7 @@ main(int argc, char *argv[])
 	nn = argo::conew_<int>(3);
 	ggosa = argo::conew_<float>(0.0);
 
-	lock_flag = argo::conew_<bool>(false);
-	lock = new argo::globallock::global_tas_lock(lock_flag);
+	lock = new argo::globallock::cohort_lock();
 
 	if (workrank == 0) {
 		printf("mimax = %d mjmax = %d mkmax = %d\n",mimax,mjmax,mkmax);
@@ -263,7 +262,6 @@ main(int argc, char *argv[])
 	argo::codelete_(ggosa);
 
 	delete lock;
-	argo::codelete_(lock_flag);
 
 	argo::finalize();
 
