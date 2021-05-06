@@ -1,17 +1,19 @@
-export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm
+# Set your ArgoDSM installation directory
+export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm/install
 
-CC      = mpic++
-CFLAGS  =-O3 -fopenmp -std=c++11
-CFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/build/lib
-CFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/src
-CFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/src/synchronization
-CFLAGS +=-largo -largobackend-mpi -lnuma -lrt
-CFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/build/lib
+CXX      =mpic++
+CXXFLAGS =-O3 -fopenmp -std=c++11
+
+IDFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/include/argo
+IDFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/include/argo/synchronization
+LDFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/lib
+LDFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/lib
+LDLIBS  +=-largo -largobackend-mpi -lnuma -lrt
 
 all: himenobmtxpa
 
 himenobmtxpa: himenobmtxpa.cpp
-	$(CC) $(CFLAGS) himenobmtxpa.cpp -o himenobmtxpa
+	$(CXX) $(CXXFLAGS) -o himenobmtxpa $(IDFLAGS) $(LDFLAGS) himenobmtxpa.cpp $(LDLIBS)
 
 clean:
 	rm -f himenobmtxpa *.o

@@ -1,16 +1,19 @@
-export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm
+# Set your ArgoDSM installation directory
+export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm/install
 
-CC      = mpic++
-CFLAGS  =-O2 -fopenmp -std=c++11 -DSTREAM_ARRAY_SIZE=10000 -DRANDACC=0 -DTEAMINIT=1
-CFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/build/lib
-CFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/src
-CFLAGS +=-largo -largobackend-mpi -lnuma -lrt
-CFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/build/lib
+CXX      =mpic++
+CXXFLAGS =-O2 -fopenmp -std=c++11
+CPPFLAGS =-DSTREAM_ARRAY_SIZE=10000 -DRANDACC=0 -DTEAMINIT=1
+
+IDFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/include/argo
+LDFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/lib
+LDFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/lib
+LDLIBS  +=-largo -largobackend-mpi -lnuma -lrt
 
 all: stream
 
 stream: stream.cpp
-	$(CC) $(CFLAGS) stream.cpp -o stream
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o stream $(IDFLAGS) $(LDFLAGS) stream.cpp $(LDLIBS)
 
 clean:
 	rm -f stream *.o

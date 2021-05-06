@@ -1,16 +1,18 @@
-export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm
+# Set your ArgoDSM installation directory
+export ARGO_INSTALL_DIRECTORY=${HOME}/argodsm/install
 
-CC      = mpic++
-CFLAGS  =-O3 -fopenmp -std=c++11
-CFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/build/lib
-CFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/src
-CFLAGS +=-largo -largobackend-mpi -lnuma -lrt
-CFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/build/lib
+CXX      =mpic++
+CXXFLAGS =-O3 -fopenmp -std=c++11
+
+IDFLAGS +=-I${ARGO_INSTALL_DIRECTORY}/include/argo
+LDFLAGS +=-L${ARGO_INSTALL_DIRECTORY}/lib
+LDFLAGS +=-Wl,-rpath=${ARGO_INSTALL_DIRECTORY}/lib
+LDLIBS  +=-largo -largobackend-mpi -lnuma -lrt
 
 all: matvec
 
 matvec: matvec.cpp
-	$(CC) $(CFLAGS) matvec.cpp -o matvec
+	$(CXX) $(CXXFLAGS) -o matvec $(IDFLAGS) $(LDFLAGS) matvec.cpp $(LDLIBS)
 
 clean:
 	rm -f matvec *.o
