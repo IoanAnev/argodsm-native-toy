@@ -1,12 +1,7 @@
-/* An ArgoDSM@OpenMP implementation of matrix multiplication.
- *
- * It receives as input the dimension N and constructs three NxN matrices
- * (+1 for verification). We can enable verification with the -v argument.
- *
- * We initialize the matrices with prefixed values which we can later
- * check to ensure correctness of the computations.
- *
- * ArgoDSM/OpenMP version written by Ioannis Anevlavis - Eta Scale AB
+/**
+ * @file
+ * @brief An ArgoDSM@OpenMP implementation of matrix multiplication.
+ * @copyright ArgoDSM@OpenMP version written by Ioannis Anevlavis - Eta Scale AB
  */
 
 #include "argo.hpp"
@@ -17,76 +12,51 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-int size;
-int impl;
-int verify;
+/* arrays' size */
+int NSIZE;
+/* size of tile */
+int BSIZE;
+
+/* global vars  */
 int nthreads;
 int workrank;
 int numtasks;
 
-double *mat_a;
-double *mat_b;
-double *mat_c;
-double *mat_r;
+/* working mtxs */
+double* mat_a;
+double* mat_b;
+double* mat_c;
+double* mat_r;
 
-static void info();
-static double get_time();
-static void matmul_opt();
-static void matmul_ref();
-static int verify_result();
-static void init_matrices();
-static void run_multiply(const int &);
-static void usage(std::ostream &, const char *);
-static void distribute(int& beg, int& end, const int& loop_size, 
-		const int& beg_offset, const int& less_equal);
+void info(const int&);
+void usage(std::ostream&,
+	   const char*);
+void init_matrices();
+void run_multiply(const int&);
+void matmul_opt();
+void matmul_ref();
+void distribute(int& beg,
+		int& end,
+		const int& loop_size, 
+		const int& beg_offset,
+		const int& less_equal);
+double get_time();
+int verify_result();
 
-#define at(x, y) ((x) * (size) + (y))
+#define at(x, y) ((x) * (NSIZE) + (y))
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
-        argo::init(10*1024*1024*1024UL);
+        argo::init(500*1024*1024UL);
 
         int c;
-        int errexit = 0;
+	int verify{0};
+        int errexit{0};
         extern char *optarg;
         extern int optind, optopt, opterr;
 
-        while ((c = getopt(argc, argv, "i:s:vh")) != -1) {
-                switch (c) {
-			case 'i':
-				impl = atoi(optarg);
-				break;
-			case 's':
-				size = atoi(optarg);
-				break;
-			case 'v':
-				verify = 1;
-				break;
-			case 'h':
-				usage(std::cout, argv[0]);
-				exit(0);
-				break;
-			case ':':
-				std::cerr << argv[0] << ": option -" << (char)optopt << " requires an operand"
-					<< std::endl;
-				errexit = 1;
-				break;
-			case '?':
-				std::cerr << argv[0] << ": illegal option -- " << (char)optopt
-					<< std::endl;
-				errexit = 1;
-				break;
-			default:
-				abort();
-                }
-        }
-
-        if (errexit) {
-                if (workrank == 0) usage(std::cerr, argv[0]);
-                exit(2);
-        }
-
-        workrank = argo::node_id();
+	workrank = argo::node_id();
         numtasks = argo::number_of_nodes();
 
         #pragma omp parallel
@@ -97,12 +67,57 @@ int main(int argc, char *argv[])
                 #endif /* _OPENMP */
         }
 
-        info();
+        while ((c = getopt(argc, argv, "s:b:vh")) != -1) {
+                switch (c) {
+			case 's':
+				NSIZE = atoi(optarg);
+				break;
+			case 'b':
+				BSIZE = atoi(optarg);
+				break;
+			case 'v':
+				verify = 1;
+				break;
+			case 'h':
+				usage(std::cout, argv[0]);
+				exit(0);
+				break;
+			case ':':
+				std::cerr << argv[0] << ": option -" << (char)optopt << " requires an operand"
+					  << std::endl;
+				errexit = 1;
+				break;
+			case '?':
+				std::cerr << argv[0] << ": illegal option -- " << (char)optopt
+					  << std::endl;
+				errexit = 1;
+				break;
+			default:
+				abort();
+                }
+        }
 
-        mat_a = argo::conew_array<double>(size * size);
-        mat_b = argo::conew_array<double>(size * size);
-        mat_c = argo::conew_array<double>(size * size);
-        mat_r = argo::conew_array<double>(size * size);
+	if (workrank == 0) {
+		/* Check 0 */
+		if (errexit) {
+			usage(std::cerr, argv[0]);
+			exit(errexit);
+		} else {
+			info(verify);
+		}
+		/* Check 1 */
+		if (NSIZE % BSIZE) {
+			std::cerr << "Error: The block size needs to "
+				  << "divide the matrix dimensions."
+				  << std::endl;
+			exit(EXIT_FAILURE);
+		}
+	}
+        
+        mat_a = argo::conew_array<double>(NSIZE * NSIZE);
+        mat_b = argo::conew_array<double>(NSIZE * NSIZE);
+        mat_c = argo::conew_array<double>(NSIZE * NSIZE);
+        mat_r = argo::conew_array<double>(NSIZE * NSIZE);
 
         #pragma omp parallel
         {
@@ -120,99 +135,86 @@ int main(int argc, char *argv[])
         return 0;
 }
 
-void init_matrices()
+void
+init_block(const int& i,
+	   const int& j)
+{
+	for (int ii = i; ii < i+BSIZE; ii++)
+		for (int jj = j; jj < j+BSIZE; jj++) {
+			mat_c[at(ii,jj)] = 0.0;
+			mat_r[at(ii,jj)] = 0.0;
+			mat_a[at(ii,jj)] = ((ii + jj) & 0x0F) * 0x1P-4;
+			mat_b[at(ii,jj)] = (((ii << 1) + (jj >> 1)) & 0x0F) * 0x1P-4;
+		}
+}
+
+void
+init_matrices()
 {
 	int beg, end;
-        int i, j;
-
-	distribute(beg, end, size, 0, 0);
+	distribute(beg, end, NSIZE, 0, 0);
 
         #pragma omp for schedule(static)
-        for (i = beg; i < end; i++) {
-                for (j = 0; j < size; j++) {
-                        mat_c[at(i,j)] = 0.0;
-                        mat_r[at(i,j)] = 0.0;
-                        mat_a[at(i,j)] = ((i + j) & 0x0F) * 0x1P-4;
-                        mat_b[at(i,j)] = (((i << 1) + (j >> 1)) & 0x0F) * 0x1P-4;
-                }
-        }
+        for (int i = beg; i < end; i += BSIZE)
+                for (int j = 0; j < NSIZE; j += BSIZE)
+			init_block(i, j);
 
         argo::barrier(nthreads);
 }
 
-void matmul_ref()
+void
+multiply_block(const int& i,
+	       const int& j,
+	       const int& k)
 {
-        int i, j, k;
-
-        for (j = 0; j < size; j++) {
-                for (i = 0; i < size; i++) {
-                        for (k = 0; k < size; k++) {
-                                mat_r[at(i,j)] += mat_a[at(i,k)] * mat_b[at(k,j)];
-                        }
-                }
-        }
+	for (int ii = i; ii < i+BSIZE; ii++)
+		for (int jj = j; jj < j+BSIZE; jj++)
+			for (int kk = k; kk < k+BSIZE; kk++)
+				mat_c[at(ii,jj)] += mat_a[at(ii,kk)] * mat_b[at(kk,jj)];
 }
 
-void matmul_opt()
+void
+matmul_opt()
 {
 	int beg, end;
-        int i, j, k;
-        double temp;
+	distribute(beg, end, NSIZE, 0, 0);
 
-	distribute(beg, end, size, 0, 0);
-
-        if      (impl == 0) {
-                #pragma omp for schedule(static)
-                for (j = beg; j < end; j++) {
-                        for (i = 0; i < size; i++) {
-                                for (k = 0; k < size; k++) {
-                                        mat_c[at(i,j)] += mat_a[at(i,k)] * mat_b[at(k,j)];
-                                }
-                        }
-                }
-        }
-        else if (impl == 1) {
-                #pragma omp for schedule(static)
-                for (i = beg; i < end; i++) {
-                        for (j = 0; j < size; j++) {
-                                for (k = 0; k < size; k++) {
-                                        mat_c[at(i,j)] += mat_a[at(i,k)] * mat_b[at(k,j)];
-                                }
-                        }
-                }
-        }
-        else if (impl == 2) {
-                #pragma omp for schedule(static)
-                for (i = beg; i < end; i++) {
-                        for (k = 0; k < size; k++) {
-                                temp = mat_a[at(i,k)];
-                                for (j = 0; j < size; j++) {
-                                        mat_c[at(i,j)] += temp * mat_b[at(k,j)];
-                                }
-                        }
-                }
-        }
+	#pragma omp for schedule(static)
+	for (int i = beg; i < end; i += BSIZE)
+		for (int j = 0; j < NSIZE; j += BSIZE)
+			for (int k = 0; k < NSIZE; k += BSIZE)
+				multiply_block(i, j, k);
 
         argo::barrier(nthreads);
 }
 
-int verify_result()
+void
+matmul_ref()
 {
-        int i, j;
-        double e_sum = 0.0;
+        for (int i = 0; i < NSIZE; i++)
+                for (int j = 0; j < NSIZE; j++)
+                        for (int k = 0; k < NSIZE; k++)
+                                mat_r[at(i,j)] += mat_a[at(i,k)] * mat_b[at(k,j)];
+}
 
-        for (i = 0; i < size; i++) {
-                for (j = 0; j < size; j++) {
-                        e_sum += mat_c[at(i,j)] < mat_r[at(i,j)] ?
-                                 mat_r[at(i,j)] - mat_c[at(i,j)] :
-                                 mat_c[at(i,j)] - mat_r[at(i,j)];
+int
+verify_result()
+{
+	double e_sum{0.0};
+
+        for (int i = 0; i < NSIZE; i++) {
+                for (int j = 0; j < NSIZE; j++) {
+			e_sum += (mat_c[at(i,j)] < mat_r[at(i,j)])
+				? mat_r[at(i,j)] - mat_c[at(i,j)]
+				: mat_c[at(i,j)] - mat_r[at(i,j)];
                 }
         }
 
         return e_sum < 1E-6;
 }
 
-static void run_multiply(const int &verify)
+void
+run_multiply(const int &verify)
 {
         double time_start, time_stop;
 
@@ -251,7 +253,8 @@ static void run_multiply(const int &verify)
         }
 }
 
-double get_time()
+double
+get_time()
 {
         struct timeval tv;
 
@@ -264,39 +267,38 @@ double get_time()
         return tv.tv_sec + tv.tv_usec * 1E-6;
 }
 
-void usage(std::ostream &os, const char *argv0)
+void
+usage(std::ostream &os,
+      const char *argv0)
 {
-        if (workrank == 0) {
-                os << "Usage: " << argv0 << " [OPTION]...\n"
-                << "\n"
-                << "Options:\n"
-                << "\t-i\tSelect implementation <0:jik, 1:ijk, 2:ikj>\n"
-                << "\t-s\tSize of matrices <N>\n"
-                << "\t-v\tVerify solution\n"
-                << "\t-h\tDisplay usage"
-                << std::endl;
-        }
+	os << "Usage: " << argv0 << " [OPTION]...\n"
+	   << "\n"
+	   << "Options:\n"
+	   << "\t-s\tSize of matrices <N>\n"
+	   << "\t-v\tVerify solution\n"
+	   << "\t-h\tDisplay usage"
+	   << std::endl;
 }
 
-void info()
+void
+info(const int& verify)
 {
-        if (workrank == 0) {
-                const std::string sverif = (verify == 0) ? "OFF" : "ON";
-                const std::string sorder = (impl == 0) ? "jik" :
-                                           (impl == 1) ? "ijk" :
-                                           (impl == 2) ? "ikj" : "inv";
+	const std::string sverif = (verify == 0) ? "OFF" : "ON";
 
-                std::cout << "MatMul: "           << size << "x" << size
-                          << ", implementation: " << sorder
-                          << ", verification: "   << sverif
-                          << ", numtasks: "       << numtasks
-                          << ", nthreads: "       << nthreads
-                          << std::endl;
-        }
+	std::cout << "MatMul: "         << NSIZE << "x" << NSIZE
+		  << ", block size: "   << BSIZE
+		  << ", verification: " << sverif
+		  << ", numtasks: "     << numtasks
+		  << ", nthreads: "     << nthreads
+		  << std::endl;
 }
 
-void distribute(int& beg, int& end, const int& loop_size, 
-		const int& beg_offset, const int& less_equal)
+void
+distribute(int& beg,
+	   int& end,
+	   const int& loop_size, 
+	   const int& beg_offset,
+	   const int& less_equal)
 {
 	int chunk = loop_size / numtasks;
 	beg = workrank * chunk + ((workrank == 0) ? beg_offset : less_equal);
