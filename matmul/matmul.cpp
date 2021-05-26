@@ -28,18 +28,20 @@ double* mat_b;
 double* mat_c;
 double* mat_r;
 
-void info(const int&);
+void info(const int&,
+	  const int&);
 void usage(std::ostream&,
 	   const char*);
 void init_matrices();
-void run_multiply(const int&);
-void matmul_opt();
-void matmul_ref();
-void distribute(int& beg,
-		int& end,
-		const int& loop_size, 
-		const int& beg_offset,
-		const int& less_equal);
+void run_multiply(const int&,
+		  const int&);
+void matmul_opt(const int&);
+void matmul_ref(const int&);
+void distribute(int&,
+		int&,
+		const int&, 
+		const int&,
+		const int&);
 double get_time();
 int verify_result();
 
@@ -53,6 +55,7 @@ main(int argc, char *argv[])
         int c;
 	int verify{0};
         int errexit{0};
+	int transpose{0};
         extern char *optarg;
         extern int optind, optopt, opterr;
 
@@ -67,7 +70,7 @@ main(int argc, char *argv[])
                 #endif /* _OPENMP */
         }
 
-        while ((c = getopt(argc, argv, "s:b:vh")) != -1) {
+        while ((c = getopt(argc, argv, "s:b:vth")) != -1) {
                 switch (c) {
 			case 's':
 				NSIZE = atoi(optarg);
@@ -77,6 +80,9 @@ main(int argc, char *argv[])
 				break;
 			case 'v':
 				verify = 1;
+				break;
+			case 't':
+				transpose = 1;
 				break;
 			case 'h':
 				usage(std::cout, argv[0]);
@@ -103,7 +109,7 @@ main(int argc, char *argv[])
 			usage(std::cerr, argv[0]);
 			exit(errexit);
 		} else {
-			info(verify);
+			info(verify, transpose);
 		}
 		/* Check 1 */
 		if (NSIZE % BSIZE) {
@@ -122,7 +128,7 @@ main(int argc, char *argv[])
         #pragma omp parallel
         {
                 init_matrices();
-                run_multiply(verify);
+                run_multiply(verify, transpose);
         }
 
         argo::codelete_array(mat_a);
@@ -165,16 +171,20 @@ init_matrices()
 void
 multiply_block(const int& i,
 	       const int& j,
-	       const int& k)
+	       const int& k,
+	       const int& transpose)
 {
 	for (int ii = i; ii < i+BSIZE; ii++)
 		for (int jj = j; jj < j+BSIZE; jj++)
 			for (int kk = k; kk < k+BSIZE; kk++)
+if (!transpose)
 				mat_c[at(ii,jj)] += mat_a[at(ii,kk)] * mat_b[at(kk,jj)];
+else
+				mat_c[at(ii,jj)] += mat_a[at(ii,kk)] * mat_b[at(jj,kk)];
 }
 
 void
-matmul_opt()
+matmul_opt(const int& transpose)
 {
 	int beg, end;
 	distribute(beg, end, NSIZE, 0, 0);
@@ -183,18 +193,21 @@ matmul_opt()
 	for (int i = beg; i < end; i += BSIZE)
 		for (int j = 0; j < NSIZE; j += BSIZE)
 			for (int k = 0; k < NSIZE; k += BSIZE)
-				multiply_block(i, j, k);
+				multiply_block(i, j, k, transpose);
 
         argo::barrier(nthreads);
 }
 
 void
-matmul_ref()
+matmul_ref(const int& transpose)
 {
         for (int i = 0; i < NSIZE; i++)
                 for (int j = 0; j < NSIZE; j++)
                         for (int k = 0; k < NSIZE; k++)
+if (!transpose)
                                 mat_r[at(i,j)] += mat_a[at(i,k)] * mat_b[at(k,j)];
+else
+				mat_r[at(i,j)] += mat_a[at(i,k)] * mat_b[at(j,k)];
 }
 
 int
@@ -214,13 +227,14 @@ verify_result()
 }
 
 void
-run_multiply(const int &verify)
+run_multiply(const int& verify,
+	     const int& transpose)
 {
         double time_start, time_stop;
 
         #pragma omp master
         time_start = get_time();
-        matmul_opt();
+        matmul_opt(transpose);
         #pragma omp master
         time_stop = get_time();
         
@@ -237,7 +251,7 @@ run_multiply(const int &verify)
                         std::cout << "Verifying solution... ";
                         
                         time_start = get_time();
-                        matmul_ref();
+                        matmul_ref(transpose);
                         time_stop = get_time();
 
                         if (verify_result())
@@ -281,15 +295,18 @@ usage(std::ostream &os,
 }
 
 void
-info(const int& verify)
+info(const int& verify,
+     const int& transpose)
 {
-	const std::string sverif = (verify == 0) ? "OFF" : "ON";
+	const std::string sverif = (verify == 0)    ? "OFF" : "ON";
+	const std::string strans = (transpose == 0) ? "OFF" : "ON";
 
-	std::cout << "MatMul: "         << NSIZE << "x" << NSIZE
-		  << ", block size: "   << BSIZE
-		  << ", verification: " << sverif
-		  << ", numtasks: "     << numtasks
-		  << ", nthreads: "     << nthreads
+	std::cout << "MatMul: "          << NSIZE << "x" << NSIZE
+		  << ", block size: "    << BSIZE
+		  << ", verification: "  << sverif
+		  << ", transposition: " << strans
+		  << ", numtasks: "      << numtasks
+		  << ", nthreads: "      << nthreads
 		  << std::endl;
 }
 
