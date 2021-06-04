@@ -95,8 +95,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	
-	N = atoi(argv[1]);
-	ITER = atoi(argv[2]);
+	N = atol(argv[1]);
+	ITER = atol(argv[2]);
 	
 	if (argc == 4) {
 		check = atoi(argv[3]);
