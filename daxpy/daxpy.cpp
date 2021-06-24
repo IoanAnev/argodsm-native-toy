@@ -105,8 +105,6 @@ int main(int argc, char *argv[])
 	x = argo::conew_array<double>(N);
 	y = argo::conew_array<double>(N);
 	
-	clock_gettime(CLOCK_MONOTONIC, &tp_start);
-
 	size_t beg, end;
 	distribute(beg, end, N, 0, 0);
 	
@@ -114,12 +112,17 @@ int main(int argc, char *argv[])
 	{
 		init(beg, end, y, 0);
 		init(beg, end, x, 42);
-		
+	}
+	argo::barrier();
+	
+	clock_gettime(CLOCK_MONOTONIC, &tp_start);
+	
+	#pragma omp parallel
+	{
 		for (size_t iter = 0; iter < ITER; ++iter) {
 			daxpy(beg, end, x, alpha, y);
 		}
 	}
-	
 	argo::barrier();
 	
 	clock_gettime(CLOCK_MONOTONIC, &tp_end);
