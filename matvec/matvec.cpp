@@ -114,7 +114,6 @@ int main(int argc, char *argv[])
 	y = argo::conew_array<double>(M);
 	x = argo::conew_array<double>(N);
 
-	clock_gettime(CLOCK_MONOTONIC, &tp_start);
 
 	size_t begM, endM, begN, endN;
 	distribute(begM, endM, M, 0, 0);
@@ -124,18 +123,22 @@ int main(int argc, char *argv[])
 	{
 		init(begM, endM, y, 0);
 		init(begN, endN, x, 1);
-		argo::barrier(nthreads);
 		
 		#pragma omp for schedule(static)
 		for (size_t i = begM; i < endM; ++i) {
 			init(0, N, &A[i * N], 2);
 		}
-		
+	}
+	argo::barrier();
+	
+	clock_gettime(CLOCK_MONOTONIC, &tp_start);
+	
+	#pragma omp parallel
+	{
 		for (size_t iter = 0; iter < ITER; ++iter) {
 			matvec(begM, endM, A, N, x, y);
 		}
 	}
-
 	argo::barrier();
 
 	clock_gettime(CLOCK_MONOTONIC, &tp_end);
