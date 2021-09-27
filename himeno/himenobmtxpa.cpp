@@ -97,7 +97,7 @@ main(int argc, char *argv[])
 	if(argc == 2){
 		strcpy(size,argv[1]);
 	} else {
-		if (workrank == 0) {
+		if (argo::node_id() == 0) {
 			printf("For example: \n");
 			printf(" Grid-size= XS (32x32x64)\n");
 			printf("\t    S  (64x64x128)\n");
