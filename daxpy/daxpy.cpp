@@ -12,7 +12,8 @@
 
 #include "argo.hpp"
 
-#include <omp.h>
+#include <thread>
+#include <vector>
 #include <iostream>
 
 int workrank, numtasks, nthreads;
@@ -25,7 +26,6 @@ void distribute(size_t& beg, size_t& end, const size_t& loop_size, const size_t&
 
 void daxpy(const size_t& beg, const size_t& end, double *x, double alpha, double *y)
 {
-	#pragma omp for nowait schedule(static)
 	for (size_t i = beg; i < end; ++i) {
 		y[i] += alpha * x[i];
 	}
@@ -33,7 +33,6 @@ void daxpy(const size_t& beg, const size_t& end, double *x, double alpha, double
 
 void init(const size_t& beg, const size_t& end, double *vector, double value)
 {	
-	#pragma omp for schedule(static)
 	for (size_t i = beg; i < end; ++i) {
 		vector[i] = value;
 	}
@@ -43,15 +42,12 @@ void check_result(size_t N, double *x, double alpha, double *y, size_t ITER)
 {
 	double *y_serial = new double[N];
 
-	#pragma omp parallel
-	{
-		init(0, N, y_serial, 0);
-		
-		for (size_t iter = 0; iter < ITER; ++iter) {
-			daxpy(0, N, x, alpha, y_serial);
-		}
+	init(0, N, y_serial, 0);
+
+	for (size_t iter = 0; iter < ITER; ++iter) {
+		daxpy(0, N, x, alpha, y_serial);
 	}
-	
+
 	for (size_t i = 0; i < N; ++i) {
 		if (y_serial[i] != y[i]) {
 			printf("FAILED\n");
@@ -59,7 +55,7 @@ void check_result(size_t N, double *x, double alpha, double *y, size_t ITER)
 			return;
 		}
 	}
-	
+
 	printf("SUCCESS\n");
 	delete[] y_serial;
 }
@@ -72,18 +68,14 @@ void usage()
 
 int main(int argc, char *argv[])
 {
-	argo::init(10*1024*1024*1024UL);
+	argo::init(256*1024*1024UL,
+             256*1024*1024UL);
 
 	workrank = argo::node_id();
 	numtasks = argo::number_of_nodes();
 
-	#pragma omp parallel
-	{
-		#if defined(_OPENMP)
-			#pragma omp master
-			nthreads = omp_get_num_threads();
-		#endif /* _OPENMP */
-	}
+	nthreads = std::thread::hardware_concurrency();
+	std::vector<std::thread> threads(nthreads);
 
 	size_t N, ITER;
 	double alpha = 3.14, *x, *y;
@@ -108,21 +100,37 @@ int main(int argc, char *argv[])
 	size_t beg, end;
 	distribute(beg, end, N, 0, 0);
 	
-	#pragma omp parallel
-	{
-		init(beg, end, y, 0);
-		init(beg, end, x, 42);
+	for (int i = 0; i < threads.size(); ++i) {
+		threads[i] = std::thread([&,i] {
+			int chunk = (end - beg) / nthreads;
+			int beg_i = beg+i*chunk;
+			int end_i = beg_i+chunk;
+
+			init(beg_i, end_i, y, 0);
+			init(beg_i, end_i, x, 42);
+		});
 	}
+
+	for (auto& t : threads)
+		t.join();
 	argo::barrier();
 	
 	clock_gettime(CLOCK_MONOTONIC, &tp_start);
-	
-	#pragma omp parallel
-	{
-		for (size_t iter = 0; iter < ITER; ++iter) {
-			daxpy(beg, end, x, alpha, y);
-		}
+
+	for (int i = 0; i < threads.size(); ++i) {
+		threads[i] = std::thread([&,i] {
+			int chunk = (end - beg) / nthreads;
+			int beg_i = beg+i*chunk;
+			int end_i = beg_i+chunk;
+
+			for (size_t iter = 0; iter < ITER; ++iter) {
+				daxpy(beg_i, end_i, x, alpha, y);
+			}
+		});
 	}
+
+	for (auto& t : threads)
+		t.join();
 	argo::barrier();
 	
 	clock_gettime(CLOCK_MONOTONIC, &tp_end);
